@@ -1,12 +1,12 @@
-import { fetch } from 'expo/fetch';
+import { fetch } from "expo/fetch";
 
-import { extractPdfText } from '@/lib/extract-pdf-text';
+import { extractPdfText } from "@/lib/extract-pdf-text";
 import {
-  DEFAULT_GROQ_MODEL,
   DEFAULT_SYSTEM_PROMPT,
   DEFAULT_TEMPERATURE,
-  DEFAULT_ZEN_MODEL,
-} from '@/lib/models';
+  PROVIDERS_CONFIG,
+} from "@/lib/models";
+import { getCachedSearch, setCachedSearch } from "@/lib/searchCache";
 import type {
   AppSettings,
   ChatCompletionMessage,
@@ -14,95 +14,58 @@ import type {
   Message,
   Provider,
   WebSearchSource,
-} from '@/lib/types';
-import {
-  getCachedSearch,
-  setCachedSearch,
-} from '@/lib/searchCache';
+} from "@/lib/types";
+import { ALL_TOOLS, executeTool, type ToolResult } from "@/lib/tools";
 
-export { effectiveModel } from '@/lib/models';
+export { effectiveModel } from "@/lib/models";
 
 // Minimum gap between actual search API calls. Repeated queries within this
 // window reuse the local cache instead of hitting the provider again.
 const SEARCH_COOLDOWN_MS = 5000;
 
-const NO_WEB_SEARCH_PROMPT =
-  'Anda TIDAK memiliki akses internet atau fitur pencarian web pada percakapan ini. Jangan mengaku telah mencari di web. Jika diminta informasi terkini yang membutuhkan akses internet, sampaikan jujur bahwa Anda tidak dapat mengakses internet.';
+const NO_TOOLS_PROMPT =
+  "Anda TIDAK memiliki akses internet atau fitur pencarian web pada percakapan ini. Jangan mengaku telah mencari di web. Jika diminta informasi terkini yang membutuhkan akses internet, sampaikan jujur bahwa Anda tidak dapat mengakses internet.";
 
 const WEB_SEARCH_PROMPT =
   'Anda memiliki akses ke pencarian web (tool "web_search"). Gunakan tool tersebut saat pertanyaan membutuhkan informasi terkini atau sumber yang dapat diverifikasi, lalu jawab berdasarkan hasil pencarian yang diberikan.';
 
-// Tool definition advertised to the model when web search is enabled. The
-// model may respond with a function call; the app performs the actual search
-// and feeds the results back before streaming the final answer.
-const WEB_SEARCH_TOOL = {
-  type: 'function',
-  function: {
-    name: 'web_search',
-    description:
-      'Cari informasi terkini di internet. Gunakan tool ini saat pertanyaan membutuhkan data terkini, berita, atau sumber/tautan yang dapat diverifikasi.',
-    parameters: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description: 'Kata kunci pencarian yang ringkas dan spesifik.',
-        },
-      },
-      required: ['query'],
-    },
-  },
-} as const;
-
-export const PROVIDER_CONFIG: Record<
-  Provider,
-  { baseUrl: string; defaultModel: string; label: string }
-> = {
-  zen: {
-    baseUrl: 'https://opencode.ai/zen/v1/chat/completions',
-    defaultModel: DEFAULT_ZEN_MODEL,
-    label: 'OpenCode Zen',
-  },
-  groq: {
-    baseUrl: 'https://api.groq.com/openai/v1/chat/completions',
-    defaultModel: DEFAULT_GROQ_MODEL,
-    label: 'Groq',
-  },
-  custom: {
-    baseUrl: '',
-    defaultModel: '',
-    label: 'Kustom',
-  },
-};
 
 function zenHeaders(apiKey: string): Record<string, string> {
   const rand = () => Math.random().toString(36).slice(2);
   return {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
     Authorization: `Bearer ${apiKey}`,
-    'User-Agent': 'opencode/latest/1.3.15/cli',
-    'x-opencode-client': 'cli',
-    'x-opencode-session': rand(),
-    'x-opencode-project': rand(),
-    'x-opencode-request': rand(),
+    "User-Agent": "opencode/latest/1.3.15/cli",
+    "x-opencode-client": "cli",
+    "x-opencode-session": rand(),
+    "x-opencode-project": rand(),
+    "x-opencode-request": rand(),
   };
 }
 
-function headersFor(provider: Provider, apiKey: string): Record<string, string> {
+function headersFor(
+  provider: Provider,
+  apiKey: string,
+): Record<string, string> {
   const base = {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
     Authorization: `Bearer ${apiKey}`,
   };
-  if (provider === 'zen') {
+  if (provider === "zen") {
     return { ...base, ...zenHeaders(apiKey) };
   }
   return base;
 }
 
-export function effectiveBaseUrl(settings: Pick<AppSettings, 'provider' | 'baseUrl'>): string {
-  const url = settings.baseUrl.trim() || PROVIDER_CONFIG[settings.provider].baseUrl;
+export function effectiveBaseUrl(
+  settings: Pick<AppSettings, "provider" | "baseUrl">,
+): string {
+  const url =
+    settings.baseUrl.trim() || PROVIDERS_CONFIG[settings.provider]?.baseUrl || "";
   if (!url) return url;
-  return /\/chat\/completions\/?$/.test(url) ? url : url.replace(/\/+$/, '') + '/chat/completions';
+  return /\/chat\/completions\/?$/.test(url)
+    ? url
+    : url.replace(/\/+$/, "") + "/chat/completions";
 }
 
 export class ApiError extends Error {
@@ -110,7 +73,7 @@ export class ApiError extends Error {
 
   constructor(status: number, message: string) {
     super(message);
-    this.name = 'ApiError';
+    this.name = "ApiError";
     this.status = status;
   }
 }
@@ -119,12 +82,12 @@ export class ApiError extends Error {
 // (role 'tool'). buildApiMessages() output is assignable to this type.
 type ApiToolCall = {
   id: string;
-  type: 'function';
+  type: "function";
   function: { name: string; arguments: string };
 };
 
 type ApiChatMessage = {
-  role: 'system' | 'user' | 'assistant' | 'tool';
+  role: "system" | "user" | "assistant" | "tool";
   content: string | ContentPart[] | null;
   tool_calls?: ApiToolCall[];
   tool_call_id?: string;
@@ -134,6 +97,7 @@ type ParsedToolCall = {
   id: string;
   name: string;
   query: string;
+  rawArgs: Record<string, unknown>;
 };
 
 // Filter out empty messages and map to the wire format accepted by the API.
@@ -153,23 +117,33 @@ export function buildApiMessages(msgs: Message[]): ChatCompletionMessage[] {
     }
 
     const parts: ContentPart[] = [];
-    if (text) parts.push({ type: 'text', text: m.content });
+    if (text) parts.push({ type: "text", text: m.content });
     for (const a of attachments) {
       if (a.kind === "image" && a.base64) {
         parts.push({
           type: "image_url",
-          image_url: { url: `data:${a.mimeType || "image/jpeg"};base64,${a.base64}` },
+          image_url: {
+            url: `data:${a.mimeType || "image/jpeg"};base64,${a.base64}`,
+          },
         });
       } else if (a.base64) {
         // Try to extract text from PDF — send as text for maximum provider compatibility
-        const isPdf = a.mimeType === "application/pdf" || a.name.toLowerCase().endsWith(".pdf");
+        const isPdf =
+          a.mimeType === "application/pdf" ||
+          a.name.toLowerCase().endsWith(".pdf");
         if (isPdf) {
           const pdfText = extractPdfText(a.base64);
           if (pdfText) {
-            parts.push({ type: "text", text: `[Isi dokumen ${a.name}]:\n${pdfText}` });
+            parts.push({
+              type: "text",
+              text: `[Isi dokumen ${a.name}]:\n${pdfText}`,
+            });
           } else {
             // Fallback: couldn't extract text, mention the file
-            parts.push({ type: "text", text: `[Lampiran: ${a.name} — tidak bisa diekstrak teksnya]` });
+            parts.push({
+              type: "text",
+              text: `[Lampiran: ${a.name} — tidak bisa diekstrak teksnya]`,
+            });
           }
         } else {
           parts.push({
@@ -186,7 +160,8 @@ export function buildApiMessages(msgs: Message[]): ChatCompletionMessage[] {
     }
     result.push({
       role: m.role,
-      content: parts.length === 1 && parts[0].type === 'text' ? parts[0].text : parts,
+      content:
+        parts.length === 1 && parts[0].type === "text" ? parts[0].text : parts,
     });
   }
   return result;
@@ -198,23 +173,23 @@ export function mapStreamError(err: unknown, provider: Provider): string {
     switch (err.status) {
       case 401:
       case 403:
-        return 'API key tidak valid atau tidak berhak. Periksa kembali API key di Pengaturan.';
+        return "API key tidak valid atau tidak berhak. Periksa kembali API key di Pengaturan.";
       case 404:
-        return 'Endpoint tidak ditemukan (HTTP 404). Periksa Server URL dan nama model di Pengaturan.';
+        return "Endpoint tidak ditemukan (HTTP 404). Periksa Server URL dan nama model di Pengaturan.";
       case 429:
-        return `Batas permintaan ${PROVIDER_CONFIG[provider].label} tercapai (429). Tunggu beberapa saat atau periksa kuota akun Anda.`;
+        return `Batas permintaan ${PROVIDERS_CONFIG[provider]?.name || provider} tercapai (429). Tunggu beberapa saat atau periksa kuota akun Anda.`;
       case 500:
-        return 'Server AI sedang bermasalah/sibuk (HTTP 500). Coba lagi beberapa menit lagi.';
+        return "Server AI sedang bermasalah/sibuk (HTTP 500). Coba lagi beberapa menit lagi.";
       default:
         return err.message;
     }
   }
 
   if (err instanceof Error) {
-    return err.message || 'Terjadi kesalahan tak terduga.';
+    return err.message || "Terjadi kesalahan tak terduga.";
   }
 
-  return 'Terjadi kesalahan tak terduga.';
+  return "Terjadi kesalahan tak terduga.";
 }
 
 type StreamChatOptions = {
@@ -243,10 +218,10 @@ export async function streamChat({
   onToken,
 }: StreamChatOptions): Promise<void> {
   const response = await fetch(baseUrl, {
-    method: 'POST',
+    method: "POST",
     headers: {
       ...headersFor(provider, apiKey),
-      Accept: 'text/event-stream',
+      Accept: "text/event-stream",
     },
     body: JSON.stringify({
       model,
@@ -262,25 +237,25 @@ export async function streamChat({
   }
 
   if (!response.body) {
-    throw new Error('Respons tidak memiliki body stream.');
+    throw new Error("Respons tidak memiliki body stream.");
   }
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  let buffer = '';
+  let buffer = "";
   let sawDataLine = false;
 
   // Process a single SSE event (the block of "data: ..." lines) and return
   // true when the stream should stop ([DONE] or finish_reason).
   const processEvent = (event: string): boolean => {
     let stopped = false;
-    for (const line of event.split('\n')) {
+    for (const line of event.split("\n")) {
       const trimmed = line.trim();
-      if (!trimmed.startsWith('data:')) continue;
+      if (!trimmed.startsWith("data:")) continue;
       sawDataLine = true;
       const data = trimmed.slice(5).trim();
       if (!data) continue;
-      if (data === '[DONE]') {
+      if (data === "[DONE]") {
         stopped = true;
         continue;
       }
@@ -295,12 +270,19 @@ export async function streamChat({
         };
         // Detect SSE error events (e.g. {"error":{"message":"...","type":"...","code":429}})
         if (json.error) {
-          const errObj = json.error as { message?: string; type?: string; code?: number };
-          throw new ApiError(errObj.code ?? 500, errObj.message ?? JSON.stringify(errObj));
+          const errObj = json.error as {
+            message?: string;
+            type?: string;
+            code?: number;
+          };
+          throw new ApiError(
+            errObj.code ?? 500,
+            errObj.message ?? JSON.stringify(errObj),
+          );
         }
         const choice = json.choices?.[0];
         const delta = choice?.delta?.content ?? choice?.message?.content;
-        if (typeof delta === 'string' && delta.length > 0) {
+        if (typeof delta === "string" && delta.length > 0) {
           onToken(delta);
         }
         if (choice?.finish_reason) stopped = true;
@@ -313,9 +295,9 @@ export async function streamChat({
 
   // Append a raw chunk (normalizing CRLF) and process any complete events.
   const feed = (chunk: string): boolean => {
-    buffer += chunk.replace(/\r\n/g, '\n');
+    buffer += chunk.replace(/\r\n/g, "\n");
     let boundary: number;
-    while ((boundary = buffer.indexOf('\n\n')) !== -1) {
+    while ((boundary = buffer.indexOf("\n\n")) !== -1) {
       const event = buffer.slice(0, boundary);
       buffer = buffer.slice(boundary + 2);
       if (processEvent(event)) return true;
@@ -341,7 +323,7 @@ export async function streamChat({
             choices?: { message?: { content?: string } }[];
           };
           const content = json.choices?.[0]?.message?.content;
-          if (typeof content === 'string' && content.length > 0) {
+          if (typeof content === "string" && content.length > 0) {
             onToken(content);
           }
         } catch {
@@ -366,9 +348,19 @@ type ChatOptions = {
   signal?: AbortSignal;
 };
 
-export async function chat({ apiKey, model, provider, baseUrl, messages, systemPrompt, temperature, webSearchEnabled, signal }: ChatOptions): Promise<string> {
+export async function chat({
+  apiKey,
+  model,
+  provider,
+  baseUrl,
+  messages,
+  systemPrompt,
+  temperature,
+  webSearchEnabled,
+  signal,
+}: ChatOptions): Promise<string> {
   const response = await fetch(baseUrl, {
-    method: 'POST',
+    method: "POST",
     headers: headersFor(provider, apiKey),
     body: JSON.stringify({
       model,
@@ -383,10 +375,12 @@ export async function chat({ apiKey, model, provider, baseUrl, messages, systemP
     throw await errorFrom(response);
   }
 
-  const json = (await response.json()) as { choices?: { message?: { content?: string } }[] };
+  const json = (await response.json()) as {
+    choices?: { message?: { content?: string } }[];
+  };
   const content = json.choices?.[0]?.message?.content;
-  if (typeof content !== 'string') {
-    throw new Error('Format respons tidak dikenal.');
+  if (typeof content !== "string") {
+    throw new Error("Format respons tidak dikenal.");
   }
   return content;
 }
@@ -400,6 +394,7 @@ type ChatWithWebSearchOptions = {
   systemPrompt?: string;
   temperature?: number;
   searchApiKey: string;
+  webSearchEnabled?: boolean;
   signal?: AbortSignal;
   onToken: (token: string) => void;
 };
@@ -409,9 +404,10 @@ export type ChatWithWebSearchResult = {
   sources: WebSearchSource[];
 };
 
-// Non-streaming probe that advertises the web_search tool. The model either
-// answers directly or asks the app to run a search first.
-async function chatWithTools(opts: {
+// Non-streaming probe that advertises all tools (web_search, calculator,
+// execute_code, convert_unit). The model either answers directly or asks the
+// app to run one or more tools first.
+async function chatWithToolProbe(opts: {
   apiKey: string;
   model: string;
   provider: Provider;
@@ -422,19 +418,29 @@ async function chatWithTools(opts: {
   webSearchEnabled?: boolean;
   signal?: AbortSignal;
 }): Promise<
-  | { type: 'content'; content: string }
-  | { type: 'tool_calls'; assistantMessage: ApiChatMessage; toolCalls: ParsedToolCall[] }
+  | { type: "content"; content: string }
+  | {
+      type: "tool_calls";
+      assistantMessage: ApiChatMessage;
+      toolCalls: ParsedToolCall[];
+    }
 > {
+  const tools = opts.webSearchEnabled ? ALL_TOOLS : ALL_TOOLS.filter((t) => t.function.name !== "web_search");
+
   const response = await fetch(opts.baseUrl, {
-    method: 'POST',
+    method: "POST",
     headers: headersFor(opts.provider, opts.apiKey),
     body: JSON.stringify({
       model: opts.model,
-      messages: withSystemPrompt(opts.messages, opts.systemPrompt, opts.webSearchEnabled),
+      messages: withSystemPrompt(
+        opts.messages,
+        opts.systemPrompt,
+        opts.webSearchEnabled,
+      ),
       stream: false,
       temperature: opts.temperature ?? DEFAULT_TEMPERATURE,
-      tools: [WEB_SEARCH_TOOL],
-      tool_choice: 'auto',
+      tools,
+      tool_choice: "auto",
     }),
     signal: opts.signal,
   });
@@ -464,20 +470,41 @@ async function chatWithTools(opts: {
       toolCalls.push({
         id: tc.id,
         name: tc.function.name,
-        query: typeof args.query === 'string' ? args.query.trim() : '',
+        query: typeof args.query === "string" ? args.query.trim() : "",
+        rawArgs: args,
       });
     }
     return {
-      type: 'tool_calls',
+      type: "tool_calls",
       assistantMessage: {
-        role: 'assistant',
+        role: "assistant",
         content: message.content ?? null,
         tool_calls: message.tool_calls,
       },
       toolCalls,
     };
   }
-  return { type: 'content', content: message?.content ?? '' };
+  return { type: "content", content: message?.content ?? "" };
+}
+
+// Execute all requested tool calls with full args and return results
+// ready to be appended as role:'tool' messages.
+async function executeToolCallsFull(
+  toolCalls: (ParsedToolCall & { rawArgs: Record<string, unknown> })[],
+  searchApiKey: string,
+  signal?: AbortSignal,
+): Promise<ToolResult[]> {
+  return Promise.all(
+    toolCalls.map(async (tc) => {
+      if (tc.name === "web_search") {
+        const query = typeof tc.rawArgs.query === "string" ? tc.rawArgs.query : "informasi terkini";
+        const result = await executeSearch(query, searchApiKey, signal);
+        return { toolCallId: tc.id, name: tc.name, result: result.content };
+      }
+      const result = await executeTool(tc.name, tc.rawArgs);
+      return { toolCallId: tc.id, name: tc.name, result };
+    }),
+  );
 }
 
 // Stream a completion and return the full accumulated text.
@@ -493,7 +520,7 @@ async function streamCollect(opts: {
   signal?: AbortSignal;
   onToken: (token: string) => void;
 }): Promise<string> {
-  let accumulated = '';
+  let accumulated = "";
   await streamChat({
     ...opts,
     onToken: (token) => {
@@ -565,7 +592,7 @@ async function performSearch(
 // ─── Exa MCP (same backend as OpenCode's built-in websearch) ───────────────
 // Minimal streamable-HTTP MCP client: initialize once for a session id, then
 // call the web_search_exa tool. The tool text is plain-formatted results.
-const EXA_MCP_URL = 'https://mcp.exa.ai/mcp?tools=web_search_exa';
+const EXA_MCP_URL = "https://mcp.exa.ai/mcp?tools=web_search_exa";
 
 async function mcpFetch(
   url: string,
@@ -574,11 +601,11 @@ async function mcpFetch(
   signal?: AbortSignal,
 ): Promise<{ sessionId: string | null; json: unknown }> {
   const response = await fetch(url, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json, text/event-stream',
-      ...(sessionId ? { 'Mcp-Session-Id': sessionId } : {}),
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+      ...(sessionId ? { "Mcp-Session-Id": sessionId } : {}),
     },
     body: JSON.stringify(body),
     signal,
@@ -587,19 +614,19 @@ async function mcpFetch(
   if (!response.ok) {
     throw new ApiError(
       response.status,
-      'Gagal terhubung ke layanan pencarian (Exa MCP).',
+      "Gagal terhubung ke layanan pencarian (Exa MCP).",
     );
   }
 
-  const nextSession = response.headers.get('mcp-session-id') ?? sessionId;
-  const contentType = response.headers.get('content-type') ?? '';
+  const nextSession = response.headers.get("mcp-session-id") ?? sessionId;
+  const contentType = response.headers.get("content-type") ?? "";
   const text = await response.text();
 
-  if (contentType.includes('text/event-stream')) {
+  if (contentType.includes("text/event-stream")) {
     const dataLine = text
-      .split('\n')
-      .find((line) => line.trim().startsWith('data:'));
-    const data = dataLine ? dataLine.trim().slice(5).trim() : '';
+      .split("\n")
+      .find((line) => line.trim().startsWith("data:"));
+    const data = dataLine ? dataLine.trim().slice(5).trim() : "";
     if (!data) return { sessionId: nextSession, json: null };
     return { sessionId: nextSession, json: JSON.parse(data) as unknown };
   }
@@ -620,13 +647,13 @@ async function searchExaMCP(
     EXA_MCP_URL,
     null,
     {
-      jsonrpc: '2.0',
+      jsonrpc: "2.0",
       id: 1,
-      method: 'initialize',
+      method: "initialize",
       params: {
-        protocolVersion: '2025-06-18',
+        protocolVersion: "2025-06-18",
         capabilities: {},
-        clientInfo: { name: 'orbitchat', version: '1.0.0' },
+        clientInfo: { name: "kawanmodel", version: "1.0.0" },
       },
     },
     signal,
@@ -636,27 +663,29 @@ async function searchExaMCP(
     EXA_MCP_URL,
     init.sessionId,
     {
-      jsonrpc: '2.0',
+      jsonrpc: "2.0",
       id: 2,
-      method: 'tools/call',
+      method: "tools/call",
       params: {
-        name: 'web_search_exa',
+        name: "web_search_exa",
         arguments: { query, numResults: 5 },
       },
     },
     signal,
   );
 
-  const result = (call.json as {
-    result?: { content?: ExaMcpContent[]; isError?: boolean };
-  } | null)?.result;
+  const result = (
+    call.json as {
+      result?: { content?: ExaMcpContent[]; isError?: boolean };
+    } | null
+  )?.result;
   if (result?.isError) {
-    throw new ApiError(0, 'Pencarian Exa mengembalikan error.');
+    throw new ApiError(0, "Pencarian Exa mengembalikan error.");
   }
 
-  const text = result?.content?.[0]?.text ?? '';
+  const text = result?.content?.[0]?.text ?? "";
   const blocks = text
-    .split('\n---\n')
+    .split("\n---\n")
     .map((b) => b.trim())
     .filter(Boolean);
 
@@ -664,34 +693,29 @@ async function searchExaMCP(
   const parts: string[] = [];
 
   for (const block of blocks) {
-    const url =
-      block.match(/URL:\s*(\S+)/)?.[1]?.trim() ?? '';
+    const url = block.match(/URL:\s*(\S+)/)?.[1]?.trim() ?? "";
     if (!url) continue;
-    const title =
-      block.match(/Title:\s*(.+)/)?.[1]?.trim() ?? url;
+    const title = block.match(/Title:\s*(.+)/)?.[1]?.trim() ?? url;
     sources.push({ title, url });
 
-    let snippet = '';
-    const hlIndex = block.indexOf('Highlights:');
+    let snippet = "";
+    const hlIndex = block.indexOf("Highlights:");
     if (hlIndex !== -1) {
       const lines = block
-        .slice(hlIndex + 'Highlights:'.length)
-        .split('\n')
+        .slice(hlIndex + "Highlights:".length)
+        .split("\n")
         .map((l) => l.trim())
         .filter(Boolean);
-      if (lines.length) snippet = lines.join(' ');
+      if (lines.length) snippet = lines.join(" ");
     }
     if (!snippet) {
-      snippet =
-        block.match(/Text:\s*(.+)/)?.[1]?.trim() ?? '';
+      snippet = block.match(/Text:\s*(.+)/)?.[1]?.trim() ?? "";
     }
     parts.push(snippet ? `${title}\n${url}\n${snippet}` : `${title}\n${url}`);
   }
 
   return {
-    content: parts.length
-      ? parts.join('\n\n')
-      : 'Tidak ada hasil pencarian.',
+    content: parts.length ? parts.join("\n\n") : "Tidak ada hasil pencarian.",
     sources,
   };
 }
@@ -701,14 +725,14 @@ async function searchTavily(
   apiKey: string,
   signal?: AbortSignal,
 ): Promise<{ content: string; sources: WebSearchSource[] }> {
-  const response = await fetch('https://api.tavily.com/search', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  const response = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       api_key: apiKey,
       query,
       max_results: 5,
-      search_depth: 'basic',
+      search_depth: "basic",
       include_answer: false,
     }),
     signal,
@@ -717,7 +741,7 @@ async function searchTavily(
   if (!response.ok) {
     throw new ApiError(
       response.status,
-      'Gagal memanggil API pencarian (Tavily). Periksa API key di Pengaturan.',
+      "Gagal memanggil API pencarian (Tavily). Periksa API key di Pengaturan.",
     );
   }
 
@@ -726,12 +750,18 @@ async function searchTavily(
   };
   const results = (json.results ?? []).slice(0, 5);
   const sources: WebSearchSource[] = results
-    .map((r) => ({ title: r.title?.trim() || r.url || 'Tanpa judul', url: r.url || '' }))
+    .map((r) => ({
+      title: r.title?.trim() || r.url || "Tanpa judul",
+      url: r.url || "",
+    }))
     .filter((s) => !!s.url);
   const content = results
-    .map((r, i) => `${i + 1}. ${r.title ?? ''}\n${r.url ?? ''}\n${r.content ?? ''}`)
-    .join('\n\n');
-  return { content: content || 'Tidak ada hasil pencarian.', sources };
+    .map(
+      (r, i) =>
+        `${i + 1}. ${r.title ?? ""}\n${r.url ?? ""}\n${r.content ?? ""}`,
+    )
+    .join("\n\n");
+  return { content: content || "Tidak ada hasil pencarian.", sources };
 }
 
 type DdgTopic = {
@@ -747,7 +777,7 @@ async function searchDuckDuckGo(
   const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
   const response = await fetch(url, { signal });
   if (!response.ok) {
-    throw new ApiError(response.status, 'Gagal memanggil layanan pencarian.');
+    throw new ApiError(response.status, "Gagal memanggil layanan pencarian.");
   }
 
   const json = (await response.json()) as {
@@ -761,7 +791,10 @@ async function searchDuckDuckGo(
   const parts: string[] = [];
 
   if (json.AbstractText) {
-    sources.push({ title: json.Heading || 'Ringkasan', url: json.AbstractURL || '' });
+    sources.push({
+      title: json.Heading || "Ringkasan",
+      url: json.AbstractURL || "",
+    });
     parts.push(json.AbstractText);
   }
 
@@ -781,15 +814,15 @@ async function searchDuckDuckGo(
   walk(json.RelatedTopics);
 
   return {
-    content: parts.length ? parts.join('\n\n') : 'Tidak ada hasil pencarian.',
+    content: parts.length ? parts.join("\n\n") : "Tidak ada hasil pencarian.",
     sources: sources.slice(0, 6),
   };
 }
 
 /**
- * Web-search aware completion. The model may decide to call web_search; the
- * app then runs the query against a search provider and streams the final
- * answer with the results in context. Sources are returned for display.
+ * Tool-aware completion. The model may decide to call any registered tool
+ * (web_search, calculator, execute_code, convert_unit); the app then runs
+ * the requested tools and streams the final answer with results in context.
  */
 export async function chatWithWebSearch({
   apiKey,
@@ -800,10 +833,11 @@ export async function chatWithWebSearch({
   systemPrompt,
   temperature,
   searchApiKey,
+  webSearchEnabled = true,
   signal,
   onToken,
 }: ChatWithWebSearchOptions): Promise<ChatWithWebSearchResult> {
-  const withTools = await chatWithTools({
+  const probe = await chatWithToolProbe({
     apiKey,
     model,
     provider,
@@ -811,12 +845,12 @@ export async function chatWithWebSearch({
     messages,
     systemPrompt,
     temperature,
-    webSearchEnabled: true,
+    webSearchEnabled,
     signal,
   });
 
   // The model answered directly — stream it for a consistent UI.
-  if (withTools.type === 'content') {
+  if (probe.type === "content") {
     const content = await streamCollect({
       apiKey,
       model,
@@ -825,28 +859,23 @@ export async function chatWithWebSearch({
       messages,
       systemPrompt,
       temperature,
-      webSearchEnabled: true,
+      webSearchEnabled,
       signal,
       onToken,
     });
     return { content, sources: [] };
   }
 
-  // Run every requested search, then stream the final answer with results.
-  const toolResults = await Promise.all(
-    withTools.toolCalls.map(async (tc) => {
-      const result = await executeSearch(tc.query || 'informasi terkini', searchApiKey, signal);
-      return { id: tc.id, ...result };
-    }),
-  );
+  // Execute every requested tool, then stream the final answer with results.
+  const toolResults = await executeToolCallsFull(probe.toolCalls, searchApiKey, signal);
 
   const nextMessages: ApiChatMessage[] = [
     ...messages,
-    withTools.assistantMessage,
+    probe.assistantMessage,
     ...toolResults.map((t) => ({
-      role: 'tool' as const,
-      tool_call_id: t.id,
-      content: `Hasil pencarian untuk pertanyaan Anda:\n\n${t.content}`,
+      role: "tool" as const,
+      tool_call_id: t.toolCallId,
+      content: t.result,
     })),
   ];
 
@@ -858,12 +887,21 @@ export async function chatWithWebSearch({
     messages: nextMessages,
     systemPrompt,
     temperature,
-    webSearchEnabled: true,
+    webSearchEnabled,
     signal,
     onToken,
   });
 
-  return { content, sources: toolResults.flatMap((t) => t.sources) };
+  // Collect sources only from web_search results
+  const sources: WebSearchSource[] = [];
+  for (const t of toolResults) {
+    if (t.name === "web_search") {
+      const cached = await getCachedSearch(t.result.slice(0, 100));
+      if (cached) sources.push(...cached.sources);
+    }
+  }
+
+  return { content, sources };
 }
 
 function withSystemPrompt(
@@ -872,10 +910,10 @@ function withSystemPrompt(
   webSearchEnabled = false,
 ): ApiChatMessage[] {
   const parts = [DEFAULT_SYSTEM_PROMPT];
-  parts.push(webSearchEnabled ? WEB_SEARCH_PROMPT : NO_WEB_SEARCH_PROMPT);
+  parts.push(webSearchEnabled ? WEB_SEARCH_PROMPT : NO_TOOLS_PROMPT);
   const custom = systemPrompt?.trim();
   if (custom) parts.push(custom);
-  return [{ role: 'system', content: parts.join('\n\n') }, ...messages];
+  return [{ role: "system", content: parts.join("\n\n") }, ...messages];
 }
 
 async function errorFrom(response: Response): Promise<ApiError> {
@@ -883,7 +921,10 @@ async function errorFrom(response: Response): Promise<ApiError> {
   try {
     const text = await response.text();
     try {
-      const json = JSON.parse(text) as { error?: { message?: string }; message?: string };
+      const json = JSON.parse(text) as {
+        error?: { message?: string };
+        message?: string;
+      };
       message = json.error?.message ?? json.message ?? text;
     } catch {
       message = text || message;

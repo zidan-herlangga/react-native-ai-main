@@ -1,12 +1,20 @@
 import { Ionicons } from "@expo/vector-icons";
+
 import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { StatsCard } from "@/components/StatsCard";
 import { Radius, Spacing } from "@/constants/theme";
+import { useChat } from "@/context/ChatContext";
 import { useAppTheme } from "@/context/ThemeContext";
+import { computeStats } from "@/lib/storage";
+
+const HEADER_PADDING_V = Spacing.two + Spacing.one;
 
 export default function AboutScreen() {
   const { colors } = useAppTheme();
+  const { conversations } = useChat();
+  const stats = computeStats(conversations);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -31,17 +39,20 @@ export default function AboutScreen() {
           <View
             style={[
               styles.logo,
-              { backgroundColor: colors.surface, borderColor: colors.border },
+              {
+                backgroundColor: colors.accentSoft,
+                borderColor: colors.accentBorder,
+              },
             ]}
           >
             <Image
-              source={require("@/assets/images/logo.png")}
+              source={require("@/assets/images/kawan-model.png")}
               style={styles.logoImage}
               resizeMode="contain"
             />
           </View>
           <Text style={[styles.appName, { color: colors.text }]}>
-            OrbitChat
+            Kawan Model
           </Text>
           <Text style={[styles.version, { color: colors.textMuted }]}>
             Versi 1.0.0
@@ -51,7 +62,7 @@ export default function AboutScreen() {
         <Section title="Tentang Aplikasi" colors={colors}>
           <View style={styles.aboutContent}>
             <Text style={[styles.aboutText, { color: colors.textSecondary }]}>
-              OrbitChat adalah asisten AI berbasis mobile yang dibangun dengan
+              Kawan Model adalah asisten AI berbasis mobile yang dibangun dengan
               Expo dan React Native. Aplikasi ini mendukung beberapa penyedia
               API seperti OpenCode Zen, Groq, dan endpoint kustom
               OpenAI-compatible lainnya.
@@ -92,12 +103,9 @@ export default function AboutScreen() {
           />
         </Section>
 
-        <Section title="Teknologi" colors={colors}>
-          <View style={styles.techGrid}>
-            <TechChip label="React Native" colors={colors} />
-            <TechChip label="Expo SDK 57" colors={colors} />
-            <TechChip label="TypeScript" colors={colors} />
-            <TechChip label="expo-router" colors={colors} />
+        <Section title="Statistik Penggunaan" colors={colors}>
+          <View style={styles.aboutContent}>
+            <StatsCard stats={stats} />
           </View>
         </Section>
 
@@ -154,33 +162,9 @@ function FeatureItem({
       <View
         style={[styles.featureIcon, { backgroundColor: colors.accentSoft }]}
       >
-        <Ionicons name={icon} size={18} color={colors.accent} />
+        <Ionicons name={icon} size={16} color={colors.accent} />
       </View>
       <Text style={[styles.featureText, { color: colors.text }]}>{text}</Text>
-    </View>
-  );
-}
-
-function TechChip({
-  label,
-  colors,
-}: {
-  label: string;
-  colors: ReturnType<typeof useAppTheme>["colors"];
-}) {
-  return (
-    <View
-      style={[
-        styles.techChip,
-        {
-          backgroundColor: colors.accentSoft,
-          borderColor: colors.accentBorder,
-        },
-      ]}
-    >
-      <Text style={[styles.techChipText, { color: colors.accentText }]}>
-        {label}
-      </Text>
     </View>
   );
 }
@@ -197,30 +181,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
+    paddingVertical: HEADER_PADDING_V,
   },
   headerSpacer: {
     width: 32,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "700",
   },
   content: {
     padding: Spacing.three,
     paddingBottom: Spacing.six,
-    gap: Spacing.two,
+    gap: Spacing.three,
   },
   logoSection: {
     alignItems: "center",
-    paddingVertical: Spacing.five,
+    paddingVertical: Spacing.four,
     gap: Spacing.two,
   },
   logo: {
-    width: 80,
-    height: 80,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
+    width: 72,
+    height: 72,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
@@ -230,32 +214,32 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   appName: {
-    fontSize: 24,
-    fontWeight: "800",
+    fontSize: 20,
+    fontWeight: "700",
   },
   version: {
-    fontSize: 14,
+    fontSize: 13,
   },
   section: {
     gap: Spacing.two,
   },
   sectionTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 1,
-    marginLeft: Spacing.two,
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+    marginLeft: Spacing.one,
   },
   card: {
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
   },
   aboutContent: {
     padding: Spacing.three,
   },
   aboutText: {
-    fontSize: 14,
-    lineHeight: 22,
+    fontSize: 13,
+    lineHeight: 20,
   },
   featureRow: {
     flexDirection: "row",
@@ -265,31 +249,43 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   featureIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  featureText: {
+    fontSize: 13,
+    fontWeight: "500",
+    flex: 1,
+  },
+  reportRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two + Spacing.one,
+    gap: Spacing.three,
+  },
+  reportIcon: {
     width: 36,
     height: 36,
     borderRadius: Radius.full,
     alignItems: "center",
     justifyContent: "center",
   },
-  featureText: {
-    fontSize: 14,
-    fontWeight: "500",
+  reportMain: {
     flex: 1,
   },
-  techGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    padding: Spacing.three,
-    gap: Spacing.two,
-  },
-  techChip: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-  },
-  techChipText: {
-    fontSize: 13,
+  reportTitle: {
+    fontSize: 14,
     fontWeight: "600",
+  },
+  reportSubtitle: {
+    fontSize: 12,
+    marginTop: 1,
+  },
+  pressed: {
+    opacity: 0.5,
   },
 });

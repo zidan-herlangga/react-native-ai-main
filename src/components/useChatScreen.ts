@@ -138,7 +138,7 @@ export function useChatScreenLogic(
 
   const headerTitle = useMemo(() => {
     if (showBack) return conversation?.title || "Percakapan";
-    return "OrbitChat";
+    return "Kawan Model";
   }, [showBack, conversation?.title]);
 
   const error: ChatError | null = useMemo(

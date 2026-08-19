@@ -1,5 +1,5 @@
 {
-  "name": "orbitchat",
+  "name": "kawanmodel",
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
@@ -8,6 +8,7 @@
     "@react-native-community/slider": "5.2.0",
     "@react-native-vector-icons/material-design-icons": "13.1.2",
     "expo": "~57.0.13",
+    "expo-audio": "~57.0.3",
     "expo-clipboard": "~57.0.1",
     "expo-constants": "~57.0.11",
     "expo-document-picker": "~57.0.1",

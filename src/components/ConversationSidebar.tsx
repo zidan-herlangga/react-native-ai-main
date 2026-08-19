@@ -49,14 +49,17 @@ async function exportConversation(conversation: Conversation) {
 
   const { File, Paths } = await import("expo-file-system");
   const Sharing = await import("expo-sharing");
-  const file = new File(Paths.cache, `${conversation.title || "percakapan"}.md`);
+  const file = new File(
+    Paths.cache,
+    `${conversation.title || "percakapan"}.md`,
+  );
   await file.write(content);
   await Sharing.shareAsync(file.uri);
 }
 
 async function shareConversationLink(conversation: Conversation) {
-  const url = `orbitchat://conversation/${conversation.id}`;
-  const text = `💬 ${conversation.title || "Percakapan OrbitChat"}\n${url}`;
+  const url = `kawanmodel://conversation/${conversation.id}`;
+  const text = `💬 ${conversation.title || "Percakapan Kawan Model"}\n${url}`;
   if (Platform.OS === "web") {
     navigator.share?.({ title: text, url });
     return;
@@ -67,7 +70,10 @@ async function shareConversationLink(conversation: Conversation) {
     const Clipboard = await import("expo-clipboard");
     await Clipboard.setStringAsync(url);
     const { Alert } = await import("react-native");
-    Alert.alert("Tautan disalin", "Tautan percakapan sudah disalin ke clipboard.");
+    Alert.alert(
+      "Tautan disalin",
+      "Tautan percakapan sudah disalin ke clipboard.",
+    );
   }
 }
 
@@ -165,7 +171,10 @@ export function ConversationSidebar({
               </Text>
               {onSearch && (
                 <Pressable
-                  onPress={() => { onClose(); onSearch(); }}
+                  onPress={() => {
+                    onClose();
+                    onSearch();
+                  }}
                   hitSlop={8}
                   style={({ pressed }) => [
                     styles.iconButton,
@@ -173,7 +182,11 @@ export function ConversationSidebar({
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Ionicons name="search" size={16} color={colors.textSecondary} />
+                  <Ionicons
+                    name="search"
+                    size={16}
+                    color={colors.textSecondary}
+                  />
                 </Pressable>
               )}
               <Pressable
@@ -197,10 +210,12 @@ export function ConversationSidebar({
                 pressed && styles.pressed,
               ]}
             >
-              <Ionicons name="create-outline" size={17} color={colors.onAccent} />
-              <Text
-                style={[styles.newChatText, { color: colors.onAccent }]}
-              >
+              <Ionicons
+                name="create-outline"
+                size={17}
+                color={colors.onAccent}
+              />
+              <Text style={[styles.newChatText, { color: colors.onAccent }]}>
                 Percakapan baru
               </Text>
             </Pressable>
@@ -248,14 +263,19 @@ export function ConversationSidebar({
                           {item.title || "Percakapan baru"}
                         </Text>
                         <Text
-                          style={[styles.itemPreview, { color: colors.textSecondary }]}
+                          style={[
+                            styles.itemPreview,
+                            { color: colors.textSecondary },
+                          ]}
                           numberOfLines={1}
                         >
                           {preview(item)}
                         </Text>
                       </View>
                       <View style={styles.itemRight}>
-                        <Text style={[styles.itemTime, { color: colors.textMuted }]}>
+                        <Text
+                          style={[styles.itemTime, { color: colors.textMuted }]}
+                        >
                           {timeAgo(item.updatedAt)}
                         </Text>
                         <View style={styles.itemActions}>

@@ -6,10 +6,10 @@ import {
   useRef,
   useState,
   type ReactNode,
-} from 'react';
+} from "react";
 
-import { useChat } from '@/context/ChatContext';
-import { useSettings } from '@/context/SettingsContext';
+import { useChat } from "@/context/ChatContext";
+import { useSettings } from "@/context/SettingsContext";
 import {
   buildApiMessages,
   chatWithWebSearch,
@@ -17,8 +17,10 @@ import {
   effectiveModel,
   mapStreamError,
   streamChat,
-} from '@/lib/api';
-import type { Message, WebSearchSource } from '@/lib/types';
+} from "@/lib/api";
+import type { Message, WebSearchSource } from "@/lib/types";
+import { useAudioPlayer } from "expo-audio";
+import * as Haptics from "expo-haptics";
 
 // Throttle interval for flushing streamed tokens to the conversation. Tokens
 // arrive much faster than the UI needs (and every flush re-parses Markdown),
@@ -26,14 +28,14 @@ import type { Message, WebSearchSource } from '@/lib/types';
 const STREAM_FLUSH_MS = 40;
 
 const EMPTY_RESPONSE_MESSAGE =
-  'Respons model kosong. Periksa model/provider di Pengaturan, atau coba lagi.';
+  "Respons model kosong. Periksa model/provider di Pengaturan, atau coba lagi.";
 
 export type ActiveStream = {
   conversationId: string;
   assistantMessageId: string;
   // 'searching' = web search enabled and the model may still be deciding to
   // call the search tool; 'streaming' = final answer tokens are flowing.
-  phase: 'searching' | 'streaming';
+  phase: "searching" | "streaming";
 } | null;
 
 type StreamOptions = {
@@ -63,6 +65,11 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
 
   const [activeStream, setActiveStream] = useState<ActiveStream>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const completionPlayer = useAudioPlayer(
+    require("../../assets/sounds/bubble-pop.wav"),
+  );
+  const completionPlayerRef = useRef(completionPlayer);
+  completionPlayerRef.current = completionPlayer;
 
   // Always-fresh refs so the async stream loop never reads stale closures.
   const settingsRef = useRef(settings);
@@ -100,7 +107,7 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
       setActiveStream({
         conversationId: options.conversationId,
         assistantMessageId: options.assistantMessage.id,
-        phase: settingsRef.current.webSearchEnabled ? 'searching' : 'streaming',
+        phase: settingsRef.current.webSearchEnabled ? "searching" : "streaming",
       });
 
       const { conversationId, history, assistantMessage } = options;
@@ -113,7 +120,7 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
         messages: history,
       }));
 
-      let accumulated = '';
+      let accumulated = "";
       let lastFlush = 0;
       let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -132,14 +139,17 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
       const scheduleFlush = () => {
         if (flushTimer) return;
         const remaining = STREAM_FLUSH_MS - (Date.now() - lastFlush);
-        flushTimer = setTimeout(() => {
-          flushTimer = null;
-          lastFlush = Date.now();
-          patchPlaceholder(conversationId, placeholderId, (m) => ({
-            ...m,
-            content: accumulated,
-          }));
-        }, Math.max(remaining, 0));
+        flushTimer = setTimeout(
+          () => {
+            flushTimer = null;
+            lastFlush = Date.now();
+            patchPlaceholder(conversationId, placeholderId, (m) => ({
+              ...m,
+              content: accumulated,
+            }));
+          },
+          Math.max(remaining, 0),
+        );
       };
 
       // Final write: content (plus model/title on first message). No-ops if
@@ -151,11 +161,11 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
       ) => {
         updateConversationRef.current(conversationId, (c) => {
           if (!c.messages.some((m) => m.id === placeholderId)) return c;
-          const firstUser = history.find((m) => m.role === 'user');
+          const firstUser = history.find((m) => m.role === "user");
           return {
             ...c,
             model: conv.model || c.model,
-            title: c.title || (firstUser?.content ?? '').slice(0, 42),
+            title: c.title || (firstUser?.content ?? "").slice(0, 42),
             messages: c.messages.map((m) =>
               m.id === placeholderId
                 ? {
@@ -178,8 +188,8 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
 
         const handleToken = (token: string) => {
           setActiveStream((prev) =>
-            prev && prev.phase === 'searching'
-              ? { ...prev, phase: 'streaming' }
+            prev && prev.phase === "searching"
+              ? { ...prev, phase: "streaming" }
               : prev,
           );
           accumulated += token;
@@ -187,7 +197,8 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
         };
 
         try {
-          if (s.webSearchEnabled) {
+          if (s.webSearchEnabled || s.toolsEnabled) {
+            // Tool-aware path: probe for tool calls, then stream answer.
             const result = await chatWithWebSearch({
               apiKey: s.apiKey,
               model,
@@ -197,11 +208,13 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
               systemPrompt: s.systemPrompt,
               temperature: s.temperature,
               searchApiKey: s.searchApiKey,
+              webSearchEnabled: s.webSearchEnabled,
               signal: controller.signal,
               onToken: handleToken,
             });
             sources = result.sources;
           } else {
+            // Fast path: direct stream, no tool probe overhead.
             await streamChat({
               apiKey: s.apiKey,
               model,
@@ -217,11 +230,18 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
 
           flush();
           const empty = !accumulated.trim();
-          commitFinal(
-            empty ? EMPTY_RESPONSE_MESSAGE : accumulated,
-            empty,
-            { model, sources },
-          );
+          commitFinal(empty ? EMPTY_RESPONSE_MESSAGE : accumulated, empty, {
+            model,
+            sources,
+          });
+          if (!empty) {
+            if (settingsRef.current.notificationSound) {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(
+                () => {},
+              );
+              completionPlayerRef.current.play();
+            }
+          }
         } catch (err) {
           flush();
           if (controller.signal.aborted) {
@@ -237,11 +257,10 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
               commitFinal(accumulated, false, { model, sources });
             }
           } else {
-            commitFinal(
-              accumulated || mapStreamError(err, s.provider),
-              true,
-              { model, sources },
-            );
+            commitFinal(accumulated || mapStreamError(err, s.provider), true, {
+              model,
+              sources,
+            });
           }
         } finally {
           if (abortRef.current === controller) {
@@ -272,6 +291,7 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
 
 export function useStreaming(): StreamingContextValue {
   const ctx = useContext(StreamingContext);
-  if (!ctx) throw new Error('useStreaming harus dipakai di dalam StreamingProvider');
+  if (!ctx)
+    throw new Error("useStreaming harus dipakai di dalam StreamingProvider");
   return ctx;
 }

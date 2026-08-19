@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
 
 import { Colors } from '@/constants/theme';
+import { useSettings } from '@/context/SettingsContext';
 
 export type AppTheme = {
   scheme: 'light' | 'dark';
@@ -12,7 +13,14 @@ const ThemeContext = createContext<AppTheme>({ scheme: 'light', colors: Colors.l
 
 export function AppThemeProvider({ children }: { children: ReactNode }) {
   const rawScheme = useColorScheme();
-  const scheme: 'light' | 'dark' = rawScheme === 'dark' ? 'dark' : 'light';
+  const { settings } = useSettings();
+
+  const scheme: 'light' | 'dark' = useMemo(() => {
+    if (settings.themeMode === 'light') return 'light';
+    if (settings.themeMode === 'dark') return 'dark';
+    return rawScheme === 'dark' ? 'dark' : 'light';
+  }, [settings.themeMode, rawScheme]);
+
   const value = useMemo<AppTheme>(
     () => ({ scheme, colors: Colors[scheme] }),
     [scheme],

@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from '@/lib/storage';
-import type { AppSettings, Provider } from '@/lib/types';
+import type { AppSettings, Provider, ThemeMode } from '@/lib/types';
 
 type SettingsContextValue = {
   settings: AppSettings;
@@ -17,6 +17,9 @@ type SettingsContextValue = {
   setTemperature: (temperature: number) => void;
   setWebSearchEnabled: (enabled: boolean) => void;
   setSearchApiKey: (key: string) => void;
+  setToolsEnabled: (enabled: boolean) => void;
+  setNotificationSound: (enabled: boolean) => void;
+  setThemeMode: (mode: ThemeMode) => void;
 };
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -58,6 +61,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setTemperature: (temperature) => setSettings((s) => ({ ...s, temperature })),
       setWebSearchEnabled: (webSearchEnabled) => setSettings((s) => ({ ...s, webSearchEnabled })),
       setSearchApiKey: (searchApiKey) => setSettings((s) => ({ ...s, searchApiKey })),
+      setToolsEnabled: (toolsEnabled) => setSettings((s) => ({ ...s, toolsEnabled })),
+      setNotificationSound: (notificationSound) => setSettings((s) => ({ ...s, notificationSound })),
+      setThemeMode: (themeMode) => setSettings((s) => ({ ...s, themeMode })),
     }),
     [settings, ready],
   );

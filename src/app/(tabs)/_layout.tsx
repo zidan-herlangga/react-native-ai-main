@@ -8,9 +8,7 @@ import { useAppTheme } from '@/context/ThemeContext';
 export default function TabsLayout() {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
-  // Lift the tab bar above the system navigation bar (Back/Home/Recents) on
-  // edge-to-edge Android and give the icons a little breathing room.
-  const bottomPad = Math.max(insets.bottom, Spacing.one);
+  const bottomPad = Math.max(insets.bottom, Spacing.two);
 
   return (
     <Tabs
@@ -21,12 +19,14 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
-          borderTopWidth: 1,
+          borderTopWidth: 0.5,
           paddingTop: Spacing.one,
           paddingBottom: bottomPad,
-          height: 58 + bottomPad,
+          height: 60 + bottomPad,
+          elevation: 0,
+          shadowOpacity: 0,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarLabelStyle: { fontSize: 10, fontWeight: '600', letterSpacing: 0.3 },
         sceneStyle: { backgroundColor: colors.background },
       }}>
       <Tabs.Screen
@@ -34,7 +34,7 @@ export default function TabsLayout() {
         options={{
           title: 'Chat',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'chatbubbles' : 'chatbubbles-outline'} size={size} color={color} />
+            <Ionicons name={focused ? 'chatbubble' : 'chatbubble-outline'} size={22} color={color} />
           ),
         }}
       />
@@ -43,7 +43,7 @@ export default function TabsLayout() {
         options={{
           title: 'Pengaturan',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'settings' : 'settings-outline'} size={size} color={color} />
+            <Ionicons name={focused ? 'settings' : 'settings-outline'} size={22} color={color} />
           ),
         }}
       />
@@ -52,7 +52,7 @@ export default function TabsLayout() {
         options={{
           title: 'Tentang',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'information-circle' : 'information-circle-outline'} size={size} color={color} />
+            <Ionicons name={focused ? 'information-circle' : 'information-circle-outline'} size={22} color={color} />
           ),
         }}
       />
@@ -61,7 +61,7 @@ export default function TabsLayout() {
         options={{
           title: 'Kontak',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'mail' : 'mail-outline'} size={size} color={color} />
+            <Ionicons name={focused ? 'mail' : 'mail-outline'} size={22} color={color} />
           ),
         }}
       />

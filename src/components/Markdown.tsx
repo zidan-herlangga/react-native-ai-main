@@ -98,8 +98,8 @@ function usePalette(): Palette {
       surface: colors.surface,
       surfaceStrong: colors.backgroundElement,
       input: colors.inputBg,
-      code: isDark ? "#0E0F11" : "#F6F5FA",
-      codeText: isDark ? "#E4E4E7" : "#34333E",
+      code: isDark ? "#0D1A2E" : "#F0F4F8",
+      codeText: isDark ? "#D5DEEB" : "#4A4A4A",
     }),
     [colors, isDark],
   );

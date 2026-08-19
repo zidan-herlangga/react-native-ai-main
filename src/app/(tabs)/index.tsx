@@ -15,12 +15,15 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { SearchModal } from "@/components/SearchModal";
 import { Fonts, Radius, Spacing } from "@/constants/theme";
 import { useChat } from "@/context/ChatContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import { markdownToPlainText } from "@/lib/markdown";
 import { getRandomSuggestions } from "@/lib/models";
 import { timeAgo, type Conversation } from "@/lib/types";
+
+const HEADER_PADDING_V = Spacing.two + Spacing.one;
 
 export default function ChatHomeScreen() {
   const { colors } = useAppTheme();
@@ -36,6 +39,7 @@ export default function ChatHomeScreen() {
   const [renameTarget, setRenameTarget] = useState<Conversation | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [randomSuggestions] = useState(() => getRandomSuggestions(4));
+  const [searchVisible, setSearchVisible] = useState(false);
 
   const handleOpen = (conversation: Conversation) => {
     openConversation(conversation.id);
@@ -119,30 +123,46 @@ export default function ChatHomeScreen() {
             <View
               style={[
                 styles.logo,
-                { backgroundColor: colors.surface, borderColor: colors.border },
+                {
+                  backgroundColor: colors.accentSoft,
+                  borderColor: colors.accentBorder,
+                },
               ]}
             >
               <Image
-                source={require("@/assets/images/logo.png")}
+                source={require("@/assets/images/kawan-model.png")}
                 style={styles.logoImage}
                 resizeMode="contain"
               />
             </View>
             <Text style={[styles.headerTitle, { color: colors.text }]}>
-              OrbitChat
+              Kawan Model
             </Text>
           </View>
-          <Pressable
-            onPress={() => router.push("/conversation/new")}
-            hitSlop={8}
-            style={({ pressed }) => [
-              styles.newChatButton,
-              { backgroundColor: colors.accent },
-              pressed && styles.pressed,
-            ]}
-          >
-            <Ionicons name="add" size={24} color={colors.onAccent} />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={() => setSearchVisible(true)}
+              hitSlop={8}
+              style={({ pressed }) => [
+                styles.iconButton,
+                { backgroundColor: colors.backgroundElement },
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons name="search" size={18} color={colors.textSecondary} />
+            </Pressable>
+            <Pressable
+              onPress={() => router.push("/conversation/new")}
+              hitSlop={8}
+              style={({ pressed }) => [
+                styles.newChatButton,
+                { backgroundColor: colors.accent },
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons name="add" size={20} color={colors.onAccent} />
+            </Pressable>
+          </View>
         </View>
       </SafeAreaView>
 
@@ -152,7 +172,7 @@ export default function ChatHomeScreen() {
           showsVerticalScrollIndicator={false}
         >
           <Text style={[styles.greeting, { color: colors.text }]}>
-            Ada yang bisa kubantu?
+            Topik hari ini
           </Text>
           <Text
             style={[styles.welcomeSubtitle, { color: colors.textSecondary }]}
@@ -169,7 +189,7 @@ export default function ChatHomeScreen() {
               pressed && styles.pressed,
             ]}
           >
-            <Ionicons name="create-outline" size={18} color={colors.onAccent} />
+            <Ionicons name="create-outline" size={16} color={colors.onAccent} />
             <Text
               style={[styles.welcomeButtonText, { color: colors.onAccent }]}
             >
@@ -186,7 +206,7 @@ export default function ChatHomeScreen() {
           ListHeaderComponent={
             <View style={styles.listHeader}>
               <Text style={[styles.greeting, { color: colors.text }]}>
-                Ada yang bisa kubantu?
+                Topik hari ini
               </Text>
               {suggestions}
               <View style={styles.sectionRow}>
@@ -255,6 +275,16 @@ export default function ChatHomeScreen() {
           }}
         />
       )}
+
+      <SearchModal
+        visible={searchVisible}
+        conversations={conversations}
+        onClose={() => setSearchVisible(false)}
+        onSelect={(id) => {
+          setSearchVisible(false);
+          router.push(`/conversation/${id}`);
+        }}
+      />
 
       <Modal
         visible={!!renameTarget}
@@ -356,7 +386,7 @@ function SuggestionCard({
       <View
         style={[styles.suggestionIcon, { backgroundColor: colors.accentSoft }]}
       >
-        <Ionicons name="arrow-up" size={14} color={colors.accent} />
+        <Ionicons name="arrow-up" size={12} color={colors.accent} />
       </View>
     </Pressable>
   );
@@ -380,7 +410,7 @@ function ActionIcon({
     >
       <Ionicons
         name={icon}
-        size={18}
+        size={16}
         color={danger ? colors.danger : colors.textSecondary}
       />
     </Pressable>
@@ -399,18 +429,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
+    paddingVertical: HEADER_PADDING_V,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.two,
+    gap: Spacing.two + Spacing.one,
   },
   logo: {
     width: 32,
     height: 32,
-    borderRadius: Radius.full,
+    borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
     justifyContent: "center",
@@ -421,12 +451,24 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: "800",
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.two,
+  },
+  iconButton: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    alignItems: "center",
+    justifyContent: "center",
   },
   newChatButton: {
-    width: 36,
-    height: 36,
+    width: 32,
+    height: 32,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: Radius.full,
@@ -439,15 +481,15 @@ const styles = StyleSheet.create({
   },
   greeting: {
     fontFamily: Fonts.serif,
-    fontSize: 27,
-    lineHeight: 34,
+    fontSize: 24,
+    lineHeight: 32,
     fontWeight: "700",
   },
   welcomeSubtitle: {
     fontSize: 14,
-    lineHeight: 21,
+    lineHeight: 20,
     maxWidth: 340,
-    marginTop: -Spacing.one,
+    marginTop: -Spacing.two,
   },
   suggestionGrid: {
     flexDirection: "row",
@@ -458,20 +500,20 @@ const styles = StyleSheet.create({
   suggestionCard: {
     flexBasis: "48%",
     flexGrow: 1,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderRadius: Radius.lg,
     padding: Spacing.three,
-    gap: Spacing.three,
-    minHeight: 92,
+    gap: Spacing.two,
+    minHeight: 84,
   },
   suggestionText: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
     flex: 1,
   },
   suggestionIcon: {
-    width: 26,
-    height: 26,
+    width: 22,
+    height: 22,
     borderRadius: Radius.full,
     alignItems: "center",
     justifyContent: "center",
@@ -484,33 +526,33 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     borderRadius: Radius.md,
     paddingVertical: Spacing.three,
-    marginTop: Spacing.two,
+    marginTop: Spacing.one,
   },
   welcomeButtonText: {
-    fontSize: 15,
-    fontWeight: "700",
+    fontSize: 14,
+    fontWeight: "600",
   },
   list: {
     paddingBottom: Spacing.four,
   },
   listHeader: {
     paddingHorizontal: Spacing.three,
-    paddingTop: Spacing.four,
-    paddingBottom: Spacing.one,
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.two,
     gap: Spacing.two,
   },
   sectionRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: Spacing.two,
+    marginTop: Spacing.one,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "700",
   },
   sectionCount: {
-    fontSize: 13,
+    fontSize: 12,
   },
   card: {
     flexDirection: "row",
@@ -532,22 +574,22 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
   },
   cardTime: {
-    fontSize: 12,
+    fontSize: 11,
   },
   cardPreview: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 16,
   },
   cardActions: {
     flexDirection: "row",
-    gap: Spacing.one,
+    gap: 0,
   },
   actionIcon: {
-    padding: Spacing.one,
+    padding: Spacing.two,
   },
   modalSafe: {
     flex: 1,
@@ -560,15 +602,15 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   modalTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "700",
   },
   modalInput: {
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    fontSize: 15,
+    paddingVertical: Spacing.two + Spacing.one,
+    fontSize: 14,
   },
   modalActions: {
     flexDirection: "row",
@@ -576,8 +618,8 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   modalButton: {
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three + Spacing.two,
+    paddingVertical: Spacing.two + Spacing.one,
     borderRadius: Radius.md,
   },
   modalButtonText: {
@@ -585,6 +627,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   pressed: {
-    opacity: 0.7,
+    opacity: 0.5,
   },
 });

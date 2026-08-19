@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import type { WebSearchSource } from "@/lib/types";
 
-const CACHE_KEY = "@orbitchat/search-cache";
+const CACHE_KEY = "@kawanmodel/search-cache";
 const CACHE_TTL_MS = 3 * 60 * 60 * 1000;
 const MAX_ENTRIES = 50;
 
@@ -22,7 +22,9 @@ async function ensureLoaded(): Promise<void> {
     loadPromise = (async () => {
       try {
         const raw = await AsyncStorage.getItem(CACHE_KEY);
-        memoryCache = raw ? (JSON.parse(raw) as Record<string, CacheEntry>) : {};
+        memoryCache = raw
+          ? (JSON.parse(raw) as Record<string, CacheEntry>)
+          : {};
       } catch {
         memoryCache = {};
       }

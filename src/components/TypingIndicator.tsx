@@ -38,7 +38,7 @@ function Dot({ delay }: { delay: number }) {
 
 export function TypingIndicator() {
   return (
-    <Animated.View style={styles.row} accessibilityLabel="OrbitChat sedang mengetik">
+    <Animated.View style={styles.row} accessibilityLabel="Kawan Model sedang mengetik">
       <Dot delay={0} />
       <Dot delay={200} />
       <Dot delay={400} />

@@ -34,7 +34,6 @@ import { modelsForProvider } from "@/lib/models";
 import type { Message } from "@/lib/types";
 
 import { AttachmentMenu } from "@/components/AttachmentMenu";
-import { ConversationSidebar } from "@/components/ConversationSidebar";
 import { EmptyState } from "@/components/EmptyState";
 import { SearchModal } from "@/components/SearchModal";
 import { useChatScreenLogic } from "./useChatScreen";
@@ -56,7 +55,7 @@ function Header({
   title,
   modelName,
   onBack,
-  onMenu,
+  onSearch,
   onNewChat,
   onModelPress,
   onSummarize,
@@ -67,7 +66,7 @@ function Header({
   title: string;
   modelName: string;
   onBack: () => void;
-  onMenu: () => void;
+  onSearch: () => void;
   onNewChat: () => void;
   onModelPress: () => void;
   onSummarize?: () => void;
@@ -95,8 +94,8 @@ function Header({
             <Ionicons name="chevron-back" size={24} color={colors.text} />
           </Pressable>
         ) : (
-          <Pressable onPress={onMenu} hitSlop={8} style={styles.headerButton}>
-            <Ionicons name="menu" size={24} color={colors.text} />
+          <Pressable onPress={onSearch} hitSlop={8} style={styles.headerButton}>
+            <Ionicons name="search" size={22} color={colors.text} />
           </Pressable>
         )}
 
@@ -163,8 +162,8 @@ function Header({
             </Pressable>
           </View>
         ) : (
-          <Pressable onPress={onMenu} hitSlop={8} style={styles.headerButton}>
-            <Ionicons name="menu" size={24} color={colors.text} />
+          <Pressable onPress={onSearch} hitSlop={8} style={styles.headerButton}>
+            <Ionicons name="search" size={22} color={colors.text} />
           </Pressable>
         )}
       </View>
@@ -291,7 +290,6 @@ export function ChatScreen({
   };
 
   const [attachmentMenuVisible, setAttachmentMenuVisible] = useState(false);
-  const [sidebarVisible, setSidebarVisible] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
 
   const isLastAssistant = (index: number) =>
@@ -319,7 +317,7 @@ export function ChatScreen({
         title={chat.headerTitle}
         modelName={chat.modelName}
         onBack={() => router.back()}
-        onMenu={() => setSidebarVisible(true)}
+        onSearch={() => setSearchVisible(true)}
         onNewChat={chat.handleNewChat}
         onModelPress={() => chat.setModelPickerVisible(true)}
         onSummarize={chat.handleSummarize}
@@ -347,9 +345,7 @@ export function ChatScreen({
                   onCopy={chat.handleCopy}
                   onDelete={chat.handleDelete}
                   onEdit={
-                    item.role === "user"
-                      ? chat.handleStartEdit
-                      : undefined
+                    item.role === "user" ? chat.handleStartEdit : undefined
                   }
                   onBookmark={chat.handleBookmark}
                   onRegenerate={
@@ -424,13 +420,6 @@ export function ChatScreen({
         onPickDocuments={chat.addDocumentAttachments}
       />
 
-      <ConversationSidebar
-        visible={sidebarVisible}
-        activeId={conversationId ?? chat.boundId ?? undefined}
-        onClose={() => setSidebarVisible(false)}
-        onSearch={() => setSearchVisible(true)}
-      />
-
       <SearchModal
         visible={searchVisible}
         conversations={conversations}
@@ -490,7 +479,9 @@ export function ChatScreen({
                   pressed && styles.pressed,
                 ]}
               >
-                <Text style={[styles.editModalButtonText, { color: colors.text }]}>
+                <Text
+                  style={[styles.editModalButtonText, { color: colors.text }]}
+                >
                   Batal
                 </Text>
               </Pressable>
@@ -505,7 +496,10 @@ export function ChatScreen({
                 ]}
               >
                 <Text
-                  style={[styles.editModalButtonText, { color: colors.onAccent }]}
+                  style={[
+                    styles.editModalButtonText,
+                    { color: colors.onAccent },
+                  ]}
                 >
                   Simpan & Kirim Ulang
                 </Text>
@@ -517,9 +511,23 @@ export function ChatScreen({
 
       {/* Summarizing indicator */}
       {chat.summarizing && (
-        <View style={[styles.summarizingOverlay, { backgroundColor: colors.surface }]}>
-          <View style={[styles.summarizingCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Ionicons name="hourglass-outline" size={20} color={colors.accent} />
+        <View
+          style={[
+            styles.summarizingOverlay,
+            { backgroundColor: colors.surface },
+          ]}
+        >
+          <View
+            style={[
+              styles.summarizingCard,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <Ionicons
+              name="hourglass-outline"
+              size={20}
+              color={colors.accent}
+            />
             <Text style={[styles.summarizingText, { color: colors.text }]}>
               Meringkas percakapan…
             </Text>

@@ -12,7 +12,7 @@ export function EmptyState() {
     >
       <View style={styles.robotBgWrap} pointerEvents="none">
         <Image
-          source={require("@/assets/images/robot.png")}
+          source={require("@/assets/images/kawan-model-transparent.png")}
           style={styles.robotBg}
           resizeMode="contain"
         />

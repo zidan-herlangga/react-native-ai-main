@@ -1,5 +1,8 @@
+import { CrashReportModal } from "@/components/CrashReportModal";
+import { Radius, Spacing } from "@/constants/theme";
+import { useAppTheme } from "@/context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
-
+import { useState } from "react";
 import {
   Alert,
   Linking,
@@ -11,14 +14,14 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Radius, Spacing } from "@/constants/theme";
-import { useAppTheme } from "@/context/ThemeContext";
+const HEADER_PADDING_V = Spacing.two + Spacing.one;
 
 const DEVELOPER_EMAIL = "zidanherlangga24@gmail.com";
 const DEVELOPER_NAME = "Zidan Herlangga";
 
 export default function ContactScreen() {
   const { colors } = useAppTheme();
+  const [crashModalVisible, setCrashModalVisible] = useState(false);
 
   const handleEmailPress = async () => {
     const url = `mailto:${DEVELOPER_EMAIL}`;
@@ -59,7 +62,7 @@ export default function ContactScreen() {
               },
             ]}
           >
-            <Ionicons name="person" size={40} color={colors.accent} />
+            <Ionicons name="person" size={36} color={colors.accent} />
           </View>
           <Text style={[styles.name, { color: colors.text }]}>
             {DEVELOPER_NAME}
@@ -83,7 +86,7 @@ export default function ContactScreen() {
                   { backgroundColor: colors.accentSoft },
                 ]}
               >
-                <Ionicons name="mail-outline" size={22} color={colors.accent} />
+                <Ionicons name="mail-outline" size={20} color={colors.accent} />
               </View>
               <View style={styles.emailInfo}>
                 <Text style={[styles.emailLabel, { color: colors.textMuted }]}>
@@ -120,7 +123,6 @@ export default function ContactScreen() {
               onPress={() => Linking.openURL("https://x.com/dansec04_")}
             />
             <SocialCard
-              // telegram
               icon="paper-plane"
               label="Telegram"
               colors={colors}
@@ -142,6 +144,45 @@ export default function ContactScreen() {
             </Text>
           </View>
         </Section>
+
+        <Section title="Masalah?" colors={colors}>
+          <Pressable
+            onPress={() => setCrashModalVisible(true)}
+            style={({ pressed }) => [
+              styles.reportRow,
+              pressed && styles.pressed,
+            ]}
+          >
+            <View
+              style={[
+                styles.reportIcon,
+                { backgroundColor: colors.dangerSoft },
+              ]}
+            >
+              <Ionicons name="bug-outline" size={18} color={colors.danger} />
+            </View>
+            <View style={styles.reportMain}>
+              <Text style={[styles.reportTitle, { color: colors.text }]}>
+                Laporkan Bug
+              </Text>
+              <Text
+                style={[styles.reportSubtitle, { color: colors.textSecondary }]}
+              >
+                Kirim laporan crash via email
+              </Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={16}
+              color={colors.textMuted}
+            />
+          </Pressable>
+        </Section>
+
+        <CrashReportModal
+          visible={crashModalVisible}
+          onClose={() => setCrashModalVisible(false)}
+        />
       </ScrollView>
     </View>
   );
@@ -171,21 +212,16 @@ function SocialCard({
   label,
   colors,
   onPress,
-  fullWidth,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   colors: ReturnType<typeof useAppTheme>["colors"];
   onPress: () => void;
-  fullWidth?: boolean;
 }) {
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [
-        fullWidth && styles.fullWidth,
-        pressed && styles.pressed,
-      ]}
+      style={({ pressed }) => [pressed && styles.pressed]}
     >
       <View
         style={[
@@ -193,7 +229,7 @@ function SocialCard({
           { backgroundColor: colors.surface, borderColor: colors.border },
         ]}
       >
-        <Ionicons name={icon} size={22} color={colors.accent} />
+        <Ionicons name={icon} size={20} color={colors.accent} />
         <Text style={[styles.socialLabel, { color: colors.text }]}>
           {label}
         </Text>
@@ -214,19 +250,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
+    paddingVertical: HEADER_PADDING_V,
   },
   headerSpacer: {
     width: 32,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "700",
   },
   content: {
     padding: Spacing.three,
     paddingBottom: Spacing.six,
-    gap: Spacing.two,
+    gap: Spacing.three,
   },
   profileSection: {
     alignItems: "center",
@@ -234,36 +270,36 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   avatar: {
-    width: 80,
-    height: 80,
+    width: 72,
+    height: 72,
     borderRadius: Radius.full,
-    borderWidth: 2,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
   name: {
-    fontSize: 22,
-    fontWeight: "800",
+    fontSize: 18,
+    fontWeight: "700",
   },
   role: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "500",
   },
   section: {
     gap: Spacing.two,
   },
   sectionTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 1,
-    marginLeft: Spacing.two,
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+    marginLeft: Spacing.one,
   },
   sectionCard: {
     gap: 0,
   },
   emailCard: {
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Spacing.three,
     gap: Spacing.two,
   },
@@ -273,27 +309,27 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   emailIcon: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: Radius.full,
     alignItems: "center",
     justifyContent: "center",
   },
   emailInfo: {
     flex: 1,
-    gap: 2,
+    gap: 1,
   },
   emailLabel: {
-    fontSize: 12,
-    fontWeight: "600",
+    fontSize: 11,
+    fontWeight: "500",
   },
   emailValue: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
   },
   emailHint: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 16,
     marginTop: Spacing.one,
   },
   socialGrid: {
@@ -306,34 +342,51 @@ const styles = StyleSheet.create({
     flexBasis: "47%",
     flexGrow: 1,
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Spacing.three,
     alignItems: "center",
     justifyContent: "center",
     gap: Spacing.two,
-    minHeight: 90,
+    minHeight: 80,
   },
   socialLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
-  },
-  fullWidth: {
-    flex: 1,
   },
   supportContent: {
     padding: Spacing.three,
     gap: Spacing.two,
   },
   supportText: {
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 13,
+    lineHeight: 19,
   },
-  fabContainer: {
+  reportRow: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingVertical: Spacing.two + Spacing.one,
+    gap: Spacing.three,
+  },
+  reportIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reportMain: {
+    flex: 1,
+  },
+  reportTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  reportSubtitle: {
+    fontSize: 12,
+    marginTop: 1,
   },
   pressed: {
-    opacity: 0.7,
+    opacity: 0.5,
   },
 });

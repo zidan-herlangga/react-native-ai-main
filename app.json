@@ -1,40 +1,51 @@
 {
   "expo": {
-    "name": "OrbitChat",
-    "slug": "orbitchat",
+    "name": "Kawan Model",
+    "slug": "kawanmodel",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo.png",
-    "scheme": "orbitchat",
+    "icon": "./assets/images/kawan-model-transparent.png",
+    "scheme": "kawanmodel",
+    "owner": "zidanherlangga",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.zidanherlangga.orbitchat"
+      "bundleIdentifier": "com.kawanmodel.aiclient",
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "Izinkan $(PRODUCT_NAME) menggunakan pengenalan suara.",
+        "NSMicrophoneUsageDescription": "Izinkan $(PRODUCT_NAME) menggunakan mikrofon untuk input suara."
+      }
     },
     "android": {
-      "package": "com.zidanherlangga.orbitchat",
+      "package": "com.kawanmodel.aiclient",
       "adaptiveIcon": {
         "backgroundColor": "#F8FAFC",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/kawan-model-transparent.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/logo.png",
-          "imageWidth": 200,
+          "image": "./assets/images/kawan-model.png",
+          "imageWidth": 600,
           "resizeMode": "contain",
-          "backgroundColor": "#F8FAFC",
+          "backgroundColor": "#FFFFFF",
           "dark": {
-            "backgroundColor": "#F8FAFC"
+            "backgroundColor": "#FFFFFF"
           }
         }
       ],
@@ -53,14 +64,18 @@
         }
       ],
       "expo-sharing",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
     "extra": {
-      "router": {}
+      "router": {},
+      "eas": {
+        "projectId": "a8688a42-45d4-451d-abc1-cc208eb9d23c"
+      }
     }
   }
 }
